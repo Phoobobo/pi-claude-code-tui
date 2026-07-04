@@ -12,14 +12,14 @@ const BRAND_RGB = "215;119;87";
 const brand = (text: string) => `\x1b[38;2;${BRAND_RGB}m${text}\x1b[39m`;
 const LEFT_PANEL_WIDTH = 42;
 
-// Based on https://pi.dev/logo-auto.svg: the blocky P mark plus the i dot.
+// The pi.dev mark drawn with a uniform 2px brush: the P bowl (equal walls all
+// around its counter) with a left stem, plus the detached i block.
 const PI_LOGO = [
-	"██████      ",
-	"██  ██      ",
-	"██████      ",
-	"██    ████  ",
-	"██    ████  ",
-	"██    ████  ",
+	"████████████    ",
+	"████    ████    ",
+	"████████████    ",
+	"████        ████",
+	"████        ████",
 ];
 
 function formatCwd(cwd: string): string {
@@ -82,17 +82,14 @@ class PiStartupHeader implements Component {
 		const cwd = formatCwd(this.ctx.cwd);
 
 		const leftLines = [
-			center(brand(PI_LOGO[0]!), leftWidth),
-			center(brand(PI_LOGO[1]!), leftWidth),
-			center(brand(PI_LOGO[2]!), leftWidth),
-			center(brand(PI_LOGO[3]!), leftWidth),
-			center(brand(PI_LOGO[4]!), leftWidth),
+			...PI_LOGO.map((line) => center(brand(line), leftWidth)),
 			center(bold("Let's build something great"), leftWidth),
 			center(muted(`${model} with ${effort} effort`), leftWidth),
 			center(dim(cwd), leftWidth),
 		];
 
 		const tipLines = [
+			"",
 			brand(bold("This is your own agent harness")),
 			muted("Ask Pi to build it"),
 			brand("──────────────────────"),
@@ -100,6 +97,7 @@ class PiStartupHeader implements Component {
 			muted("But you are on your own"),
 			muted("You are powerful cause you're building"),
 			muted("You are wise cause you're creating"),
+			"",
 			"",
 		];
 
