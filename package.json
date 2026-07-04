@@ -3,11 +3,19 @@
   "version": "0.1.0",
   "description": "A pi package that gives the TUI a polished Pi startup header and Codex-style input box.",
   "type": "module",
-  "keywords": ["pi-package", "pi", "tui", "startup", "theme"],
+  "keywords": ["pi-package", "pi", "tui", "startup", "theme", "claude", "codex"],
+  "homepage": "https://github.com/Phoobobo/pi-claude-code-tui#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Phoobobo/pi-claude-code-tui.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Phoobobo/pi-claude-code-tui/issues"
+  },
   "files": ["extensions", "assets", "README.md"],
   "pi": {
     "extensions": ["./extensions"],
-    "image": "./assets/screenshot.png"
+    "image": "https://raw.githubusercontent.com/Phoobobo/pi-claude-code-tui/main/assets/screenshot.png"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

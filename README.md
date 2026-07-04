@@ -8,7 +8,7 @@ A pi package that gives startup a polished Pi header while keeping pi's original
 
 - Header title: left-aligned `─── Pi v<pi version> ─────`
 - Pi logo in `rgb(215,119,87)`
-- Center text: `Let's build something great!`
+- Center text: `Let's build something great`
 - Shows current model, thinking effort, and cwd
 - Right-side tips panel on wide terminals
 - Codex-style rounded input box
