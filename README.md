@@ -44,3 +44,7 @@ pi -e .
 
 - `/pi-startup-look` — reapply this look
 - `/pi-look` — restore pi's built-in header, footer, editor, and spinner
+
+## License
+
+MIT

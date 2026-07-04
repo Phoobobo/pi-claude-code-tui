@@ -4,6 +4,7 @@
   "description": "A pi package that gives the TUI a polished Pi startup header and Codex-style input box.",
   "type": "module",
   "keywords": ["pi-package", "pi", "tui", "startup", "theme", "claude", "codex"],
+  "license": "MIT",
   "homepage": "https://github.com/Phoobobo/pi-claude-code-tui#readme",
   "repository": {
     "type": "git",
@@ -12,7 +13,7 @@
   "bugs": {
     "url": "https://github.com/Phoobobo/pi-claude-code-tui/issues"
   },
-  "files": ["extensions", "assets", "README.md"],
+  "files": ["extensions", "assets", "README.md", "LICENSE"],
   "pi": {
     "extensions": ["./extensions"],
     "image": "https://raw.githubusercontent.com/Phoobobo/pi-claude-code-tui/main/assets/screenshot.png"
