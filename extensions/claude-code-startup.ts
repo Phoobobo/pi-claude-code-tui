@@ -95,7 +95,7 @@ class PiStartupHeader implements Component {
 		const tipLines = [
 			brand(bold("This is your own agent harness")),
 			muted("Ask Pi to build it"),
-			dim("──────────────────────"),
+			brand("──────────────────────"),
 			brand(bold("AI is powerful")),
 			muted("But you are on your own"),
 			muted("You are powerful cause you're building"),
