@@ -1,0 +1,168 @@
+import {
+	CustomEditor,
+	VERSION,
+	type ExtensionAPI,
+	type ExtensionContext,
+	type KeybindingsManager,
+} from "@earendil-works/pi-coding-agent";
+import type { Component, EditorTheme, TUI } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+
+const BRAND_RGB = "215;119;87";
+const brand = (text: string) => `\x1b[38;2;${BRAND_RGB}m${text}\x1b[39m`;
+const LEFT_PANEL_WIDTH = 42;
+
+// Based on https://pi.dev/logo-auto.svg: the blocky P mark plus the i dot.
+const PI_LOGO = [
+	"██████      ",
+	"██  ██      ",
+	"██████      ",
+	"██    ████  ",
+	"██    ████  ",
+	"██    ████  ",
+];
+
+function formatCwd(cwd: string): string {
+	const home = process.env.HOME;
+	return home && cwd.startsWith(home) ? `~${cwd.slice(home.length)}` : cwd;
+}
+
+function center(text: string, width: number): string {
+	if (width <= 0) return "";
+	const w = visibleWidth(text);
+	if (w >= width) return truncateToWidth(text, width, "");
+	return `${" ".repeat(Math.floor((width - w) / 2))}${text}`;
+}
+
+function padRight(text: string, width: number): string {
+	const clipped = truncateToWidth(text, width, "");
+	return clipped + " ".repeat(Math.max(0, width - visibleWidth(clipped)));
+}
+
+function borderLine(left: string, label: string, right: string, width: number): string {
+	if (width <= 1) return "";
+	if (width < 8 || label.length === 0) return brand(truncateToWidth(left + "─".repeat(Math.max(0, width - 2)) + right, width, ""));
+
+	const before = "─── ";
+	const after = " ─────";
+	const fixedWidth = visibleWidth(before) + visibleWidth(label) + visibleWidth(after);
+	const fill = Math.max(0, width - 2 - fixedWidth);
+	return `${brand(left)}${brand(before)}${label}${brand(after)}${brand("─".repeat(fill))}${brand(right)}`;
+}
+
+function boxedLine(content: string, width: number): string {
+	if (width <= 2) return truncateToWidth(content, width, "");
+	return `${brand("│")}${padRight(content, width - 2)}${brand("│")}`;
+}
+
+function twoColumn(left: string, right: string, leftWidth: number, rightWidth: number): string {
+	return `${padRight(left, leftWidth)} ${brand("│")} ${padRight(right, rightWidth)}`;
+}
+
+class PiStartupHeader implements Component {
+	constructor(
+		private readonly pi: ExtensionAPI,
+		private readonly ctx: ExtensionContext,
+	) {}
+
+	render(width: number): string[] {
+		if (width < 24) return [this.ctx.ui.theme.fg("accent", `Pi v${VERSION}`)];
+
+		const theme = this.ctx.ui.theme;
+		const muted = (s: string) => theme.fg("muted", s);
+		const dim = (s: string) => theme.fg("dim", s);
+		const bold = (s: string) => theme.bold(s);
+
+		const innerWidth = width - 2;
+		const leftWidth = Math.min(LEFT_PANEL_WIDTH, innerWidth);
+		const rightWidth = Math.max(0, innerWidth - leftWidth - 3);
+		const useTips = rightWidth >= 24;
+		const model = this.ctx.model?.id ?? "Default model";
+		const effort = this.pi.getThinkingLevel();
+		const cwd = formatCwd(this.ctx.cwd);
+
+		const leftLines = [
+			center(brand(PI_LOGO[0]!), leftWidth),
+			center(brand(PI_LOGO[1]!), leftWidth),
+			center(brand(PI_LOGO[2]!), leftWidth),
+			center(brand(PI_LOGO[3]!), leftWidth),
+			center(brand(PI_LOGO[4]!), leftWidth),
+			center(bold("Let's build something great"), leftWidth),
+			center(muted(`${model} with ${effort} effort`), leftWidth),
+			center(dim(cwd), leftWidth),
+		];
+
+		const tipLines = [
+			brand(bold("This is your own agent harness")),
+			muted("Ask Pi to build it"),
+			dim("──────────────────────"),
+			brand(bold("AI is powerful")),
+			muted("But you are on your own"),
+			muted("You are powerful cause you're building"),
+			muted("You are wise cause you're creating"),
+			"",
+		];
+
+		const lines = [borderLine("╭", `${brand("Pi")} v${VERSION}`, "╮", width)];
+		for (let i = 0; i < leftLines.length; i++) {
+			const content = useTips ? twoColumn(leftLines[i] ?? "", tipLines[i] ?? "", leftWidth, rightWidth) : padRight(leftLines[i] ?? "", leftWidth);
+			lines.push(boxedLine(content, width));
+		}
+		lines.push(borderLine("╰", "", "╯", width));
+		return lines.map((line) => truncateToWidth(line, width, ""));
+	}
+
+	invalidate(): void {}
+}
+
+class CodexStyleEditor extends CustomEditor {
+	constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
+		super(tui, theme, keybindings, { paddingX: 1 });
+	}
+
+	render(width: number): string[] {
+		const lines = super.render(width);
+		if (lines.length === 0 || width < 4) return lines;
+
+		const border = (s: string) => this.borderColor(s);
+		lines[0] = border(`╭${"─".repeat(Math.max(0, width - 2))}╮`);
+		lines[lines.length - 1] = border(`╰${"─".repeat(Math.max(0, width - 2))}╯`);
+		return lines.map((line) => padRight(truncateToWidth(line, width, ""), width));
+	}
+}
+
+function applyPiLook(pi: ExtensionAPI, ctx: ExtensionContext): void {
+	if (ctx.mode !== "tui") return;
+
+	ctx.ui.setTitle("Pi");
+	ctx.ui.setHeader(() => new PiStartupHeader(pi, ctx));
+	ctx.ui.setFooter(undefined); // keep pi's original footer
+	ctx.ui.setWorkingIndicator(undefined); // keep pi's original spinner
+	ctx.ui.setEditorComponent((tui, theme, keybindings) => new CodexStyleEditor(tui, theme, keybindings));
+}
+
+export default function (pi: ExtensionAPI) {
+	pi.on("session_start", (_event, ctx) => {
+		applyPiLook(pi, ctx);
+	});
+
+	pi.registerCommand("pi-startup-look", {
+		description: "Apply the Pi startup header with a Codex-style input box",
+		handler: async (_args, ctx) => {
+			applyPiLook(pi, ctx);
+			ctx.ui.notify("Pi startup look applied", "info");
+		},
+	});
+
+	pi.registerCommand("pi-look", {
+		description: "Restore pi's built-in TUI header, footer, editor, and spinner",
+		handler: async (_args, ctx) => {
+			ctx.ui.setTitle("pi");
+			ctx.ui.setHeader(undefined);
+			ctx.ui.setFooter(undefined);
+			ctx.ui.setWorkingIndicator(undefined);
+			ctx.ui.setEditorComponent(undefined);
+			ctx.ui.notify("Built-in pi look restored", "info");
+		},
+	});
+}
