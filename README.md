@@ -27,7 +27,7 @@ pi -e npm:pi-claude-code-tui
 ## What it changes
 
 - Header title: left-aligned `─── Pi v<pi version> ─────`
-- Pi logo in `rgb(215,119,87)`
+- Animated Pi logo matching the dynamic color-changing mark from `curl -fsSL https://pi.dev/install.sh | sh`, settling into the border color
 - Center text: `Let's build something great!`
 - Shows current model, thinking effort, and cwd
 - Right-side tips panel on wide terminals
