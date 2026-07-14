@@ -12,6 +12,7 @@ const BRAND_RGB = "215;119;87";
 const brand = (text: string) => `\x1b[38;2;${BRAND_RGB}m${text}\x1b[39m`;
 const cursorStyle = () => `\x1b[48;2;${BRAND_RGB}m\x1b[38;2;24;24;30m`;
 const LEFT_PANEL_WIDTH = 42;
+const LOGO_CELL = "███";
 const LOGO_ANIMATION_INTERVAL_MS = 120;
 
 type LogoColor = "panel" | "cyan" | "red" | "green" | "orange" | "white" | "flash" | "brand";
@@ -43,20 +44,20 @@ const LOGO_FRAMES: LogoFrame[] = [
 const colorCell = (color: LogoColor): string => {
 	switch (color) {
 		case "cyan":
-			return "\x1b[36m██\x1b[39m";
+			return `\x1b[36m${LOGO_CELL}\x1b[39m`;
 		case "red":
-			return "\x1b[31m██\x1b[39m";
+			return `\x1b[31m${LOGO_CELL}\x1b[39m`;
 		case "green":
-			return "\x1b[32m██\x1b[39m";
+			return `\x1b[32m${LOGO_CELL}\x1b[39m`;
 		case "orange":
 		case "flash":
-			return "\x1b[33m██\x1b[39m";
+			return `\x1b[33m${LOGO_CELL}\x1b[39m`;
 		case "white":
-			return "\x1b[39m██";
+			return `\x1b[39m${LOGO_CELL}`;
 		case "brand":
-			return brand("██");
+			return brand(LOGO_CELL);
 		default:
-			return "  ";
+			return " ".repeat(LOGO_CELL.length);
 	}
 };
 
@@ -278,7 +279,8 @@ function applyPiLook(pi: ExtensionAPI, ctx: ExtensionContext): void {
 
 export default function (pi: ExtensionAPI) {
 	pi.on("session_start", (_event, ctx) => {
-		applyPiLook(pi, ctx);
+		const applyAfterOtherStartupHandlers = setTimeout(() => applyPiLook(pi, ctx), 0);
+		applyAfterOtherStartupHandlers.unref?.();
 	});
 
 	pi.registerCommand("pi-startup-look", {
