@@ -10,6 +10,7 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 const BRAND_RGB = "215;119;87";
 const brand = (text: string) => `\x1b[38;2;${BRAND_RGB}m${text}\x1b[39m`;
+const cursorStyle = () => `\x1b[48;2;${BRAND_RGB}m\x1b[38;2;24;24;30m`;
 const LEFT_PANEL_WIDTH = 42;
 const LOGO_ANIMATION_INTERVAL_MS = 120;
 
@@ -236,15 +237,21 @@ class PiStartupHeader implements Component {
 }
 
 class CodexStyleEditor extends CustomEditor {
-	constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
+	constructor(
+		tui: TUI,
+		theme: EditorTheme,
+		keybindings: KeybindingsManager,
+		private readonly cursorStyle: () => string,
+	) {
 		super(tui, theme, keybindings, { paddingX: 1 });
 	}
 
 	render(width: number): string[] {
-		const lines = super.render(width);
+		const cursor = this.cursorStyle();
+		const lines = super.render(width).map((line) => line.replaceAll("\x1b[7m", cursor));
 		if (lines.length === 0 || width < 4) return lines;
 
-		const border = (s: string) => this.borderColor(s);
+		const border = (s: string) => brand(s);
 		lines[0] = border(`╭${"─".repeat(Math.max(0, width - 2))}╮`);
 		lines[lines.length - 1] = border(`╰${"─".repeat(Math.max(0, width - 2))}╯`);
 		return lines.map((line) => padRight(truncateToWidth(line, width, ""), width));
@@ -264,7 +271,9 @@ function applyPiLook(pi: ExtensionAPI, ctx: ExtensionContext): void {
 	});
 	ctx.ui.setFooter(undefined); // keep pi's original footer
 	ctx.ui.setWorkingIndicator(undefined); // keep pi's original spinner
-	ctx.ui.setEditorComponent((tui, theme, keybindings) => new CodexStyleEditor(tui, theme, keybindings));
+	ctx.ui.setEditorComponent(
+		(tui, theme, keybindings) => new CodexStyleEditor(tui, theme, keybindings, cursorStyle),
+	);
 }
 
 export default function (pi: ExtensionAPI) {
