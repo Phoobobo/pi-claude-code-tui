@@ -1,6 +1,6 @@
 {
   "name": "pi-claude-code-tui",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "A pi package that gives the TUI a polished Pi startup header and Codex-style input box.",
   "type": "module",
   "keywords": [
@@ -27,9 +27,13 @@
     "README.md",
     "LICENSE"
   ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/**/*.test.ts"
+  },
   "pi": {
     "extensions": [
-      "./extensions"
+      "./extensions/claude-code-startup.ts"
     ],
     "image": "https://raw.githubusercontent.com/Phoobobo/pi-claude-code-tui/main/assets/screenshot.png"
   },

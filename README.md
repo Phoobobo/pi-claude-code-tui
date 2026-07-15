@@ -42,8 +42,8 @@ pi -e .
 
 ## Commands
 
-- `/pi-startup-look` — reapply this look
-- `/pi-look` — restore pi's built-in header, footer, editor, and spinner
+- `/use-claude-code-tui` — switch to this package's look (Pi header + Codex-style input)
+- `/use-default-tui` — switch back to pi's built-in header, footer, editor, and spinner
 
 ## License
 

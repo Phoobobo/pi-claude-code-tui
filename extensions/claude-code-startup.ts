@@ -7,11 +7,17 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { Component, EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import {
+	applyRoundedEditorBorders,
+	brand,
+	center,
+	cursorStyleOpen,
+	formatCwd,
+	headerColumnWidths,
+	padRight,
+	restyleEditorCursor,
+} from "./render-utils.ts";
 
-const BRAND_RGB = "215;119;87";
-const brand = (text: string) => `\x1b[38;2;${BRAND_RGB}m${text}\x1b[39m`;
-const cursorStyle = () => `\x1b[48;2;${BRAND_RGB}m\x1b[38;2;24;24;30m`;
-const LEFT_PANEL_WIDTH = 42;
 const LOGO_CELL = "███";
 const LOGO_ANIMATION_INTERVAL_MS = 120;
 
@@ -60,23 +66,6 @@ const colorCell = (color: LogoColor): string => {
 			return " ".repeat(LOGO_CELL.length);
 	}
 };
-
-function formatCwd(cwd: string): string {
-	const home = process.env.HOME;
-	return home && cwd.startsWith(home) ? `~${cwd.slice(home.length)}` : cwd;
-}
-
-function center(text: string, width: number): string {
-	if (width <= 0) return "";
-	const w = visibleWidth(text);
-	if (w >= width) return truncateToWidth(text, width, "");
-	return `${" ".repeat(Math.floor((width - w) / 2))}${text}`;
-}
-
-function padRight(text: string, width: number): string {
-	const clipped = truncateToWidth(text, width, "");
-	return clipped + " ".repeat(Math.max(0, width - visibleWidth(clipped)));
-}
 
 function hasCell(y: number, x: number, cells: string): boolean {
 	return cells.split(" ").includes(`${y},${x}`);
@@ -133,16 +122,37 @@ function logoCellColor(frame: LogoFrame, y: number, x: number): LogoColor {
 }
 
 function piLogoFrame(frameIndex: number): string[] {
-	const frame = LOGO_FRAMES[frameIndex % LOGO_FRAMES.length];
-	const lines: string[] = [];
-	// Crop the installer's 9-row animation canvas slightly so the startup
-	// header stays compact while preserving the final mark.
+	const frame = LOGO_FRAMES[frameIndex % LOGO_FRAMES.length]!;
+	// Crop the installer's 9-row canvas vertically for a compact header, then
+	// tight-crop empty columns so the mark centers cleanly in the logo half
+	// (same idea as Claude Code's centered mascot).
+	const grid: LogoColor[][] = [];
 	for (let y = 1; y <= 7; y++) {
-		let line = "";
-		for (let x = 1; x <= 8; x++) line += colorCell(logoCellColor(frame, y, x));
-		lines.push(line);
+		const row: LogoColor[] = [];
+		for (let x = 1; x <= 8; x++) row.push(logoCellColor(frame, y, x));
+		grid.push(row);
 	}
-	return lines;
+
+	let minX = 7;
+	let maxX = 0;
+	for (const row of grid) {
+		row.forEach((cell, x) => {
+			if (cell !== "panel") {
+				minX = Math.min(minX, x);
+				maxX = Math.max(maxX, x);
+			}
+		});
+	}
+	if (maxX < minX) {
+		minX = 0;
+		maxX = 7;
+	}
+
+	return grid.map((row) => {
+		let line = "";
+		for (let x = minX; x <= maxX; x++) line += colorCell(row[x]!);
+		return line;
+	});
 }
 
 function borderLine(left: string, label: string, right: string, width: number): string {
@@ -162,7 +172,8 @@ function boxedLine(content: string, width: number): string {
 }
 
 function twoColumn(left: string, right: string, leftWidth: number, rightWidth: number): string {
-	return `${padRight(left, leftWidth)} ${brand("│")} ${padRight(right, rightWidth)}`;
+	// Tips sidebar truncates with an ellipsis (Claude Code style); logo half does not.
+	return `${padRight(left, leftWidth)} ${brand("│")} ${padRight(right, rightWidth, "…")}`;
 }
 
 class PiStartupHeader implements Component {
@@ -194,9 +205,7 @@ class PiStartupHeader implements Component {
 		const bold = (s: string) => theme.bold(s);
 
 		const innerWidth = width - 2;
-		const leftWidth = Math.min(LEFT_PANEL_WIDTH, innerWidth);
-		const rightWidth = Math.max(0, innerWidth - leftWidth - 3);
-		const useTips = rightWidth >= 24;
+		const { leftWidth, rightWidth, useTips } = headerColumnWidths(innerWidth);
 		const model = this.ctx.model?.id ?? "Default model";
 		const effort = this.pi.getThinkingLevel();
 		const cwd = formatCwd(this.ctx.cwd);
@@ -208,11 +217,13 @@ class PiStartupHeader implements Component {
 			center(dim(cwd), leftWidth),
 		];
 
+		// Right sidebar: short headings + body lines (truncated with … when narrow).
+		const tipDivider = brand("─".repeat(Math.max(8, Math.min(rightWidth, 22))));
 		const tipLines = [
 			"",
 			brand(bold("This is your own agent harness")),
 			muted("Ask Pi to build it"),
-			brand("──────────────────────"),
+			tipDivider,
 			brand(bold("AI is powerful")),
 			muted("But you are on your own"),
 			muted("You are powerful cause you're building"),
@@ -242,38 +253,38 @@ class CodexStyleEditor extends CustomEditor {
 		tui: TUI,
 		theme: EditorTheme,
 		keybindings: KeybindingsManager,
-		private readonly cursorStyle: () => string,
+		private readonly cursorOpen: () => string,
 	) {
 		super(tui, theme, keybindings, { paddingX: 1 });
 	}
 
 	render(width: number): string[] {
-		const cursor = this.cursorStyle();
-		const lines = super.render(width).map((line) => line.replaceAll("\x1b[7m", cursor));
-		if (lines.length === 0 || width < 4) return lines;
-
-		const border = (s: string) => brand(s);
-		lines[0] = border(`╭${"─".repeat(Math.max(0, width - 2))}╮`);
-		lines[lines.length - 1] = border(`╰${"─".repeat(Math.max(0, width - 2))}╯`);
-		return lines.map((line) => padRight(truncateToWidth(line, width, ""), width));
+		const open = this.cursorOpen();
+		const lines = super.render(width).map((line) => restyleEditorCursor(line, open));
+		return applyRoundedEditorBorders(lines, width);
 	}
 }
 
 let activePiStartupHeader: PiStartupHeader | undefined;
+
+function disposeActiveHeader(): void {
+	activePiStartupHeader?.dispose();
+	activePiStartupHeader = undefined;
+}
 
 function applyPiLook(pi: ExtensionAPI, ctx: ExtensionContext): void {
 	if (ctx.mode !== "tui") return;
 
 	ctx.ui.setTitle("Pi");
 	ctx.ui.setHeader((tui) => {
-		activePiStartupHeader?.dispose();
+		disposeActiveHeader();
 		activePiStartupHeader = new PiStartupHeader(pi, ctx, tui);
 		return activePiStartupHeader;
 	});
 	ctx.ui.setFooter(undefined); // keep pi's original footer
 	ctx.ui.setWorkingIndicator(undefined); // keep pi's original spinner
 	ctx.ui.setEditorComponent(
-		(tui, theme, keybindings) => new CodexStyleEditor(tui, theme, keybindings, cursorStyle),
+		(tui, theme, keybindings) => new CodexStyleEditor(tui, theme, keybindings, cursorStyleOpen),
 	);
 }
 
@@ -283,25 +294,29 @@ export default function (pi: ExtensionAPI) {
 		applyAfterOtherStartupHandlers.unref?.();
 	});
 
-	pi.registerCommand("pi-startup-look", {
-		description: "Apply the Pi startup header with a Codex-style input box",
+	pi.on("session_shutdown", () => {
+		disposeActiveHeader();
+	});
+
+	// Named after the package (pi-claude-code-tui), not the host app.
+	pi.registerCommand("use-claude-code-tui", {
+		description: "Switch to the pi-claude-code-tui look (Pi header + Codex-style input)",
 		handler: async (_args, ctx) => {
 			applyPiLook(pi, ctx);
-			ctx.ui.notify("Pi startup look applied", "info");
+			ctx.ui.notify("Using pi-claude-code-tui", "info");
 		},
 	});
 
-	pi.registerCommand("pi-look", {
-		description: "Restore pi's built-in TUI header, footer, editor, and spinner",
+	pi.registerCommand("use-default-tui", {
+		description: "Switch back to pi's built-in header, footer, editor, and spinner",
 		handler: async (_args, ctx) => {
-			activePiStartupHeader?.dispose();
-			activePiStartupHeader = undefined;
+			disposeActiveHeader();
 			ctx.ui.setTitle("pi");
 			ctx.ui.setHeader(undefined);
 			ctx.ui.setFooter(undefined);
 			ctx.ui.setWorkingIndicator(undefined);
 			ctx.ui.setEditorComponent(undefined);
-			ctx.ui.notify("Built-in pi look restored", "info");
+			ctx.ui.notify("Using default pi TUI", "info");
 		},
 	});
 }
