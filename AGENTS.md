@@ -36,6 +36,8 @@ The registered extension is only `extensions/claude-code-startup.ts` via `packag
 - Existing source uses tabs for indentation.
 - Prefer small helper functions for terminal width, padding, truncation, and ANSI styling.
 - Preserve pi defaults by passing `undefined` for built-in footer/spinner/editor/header when restoring.
+- Header borders/logo final color use `theme.fg("accent")`.
+- Editor uses half-open rounded top/bottom borders (`Editor.borderColor`) and a block cursor from theme accent (`getFgAnsi("accent")` → bg).
 
 ## Assets
 

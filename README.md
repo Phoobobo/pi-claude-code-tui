@@ -26,12 +26,13 @@ pi -e npm:pi-claude-code-tui
 
 ## What it changes
 
-- Header title: left-aligned `─── Pi v<pi version> ─────`
-- Animated Pi logo matching the dynamic color-changing mark from `curl -fsSL https://pi.dev/install.sh | sh`, settling into the border color
-- Center text: `Let's build something great!`
-- Shows current model, thinking effort, and cwd
-- Right-side tips panel on wide terminals
-- Codex-style rounded input box
+- Header title: left-aligned `─── Pi v<pi version> ─────` (theme accent color)
+- Animated Pi logo matching the dynamic color-changing mark from `curl -fsSL https://pi.dev/install.sh | sh`, settling into the accent color
+- Center text: `Let's build something great`
+- Shows current model (`provider/id`), thinking effort, and cwd
+- Right-side tips panel on wide terminals (narrow sidebar with `…` truncation)
+- Half-open rounded input box (top/bottom borders only; uses editor border color)
+- Block cursor uses the theme accent color
 - Keeps pi's original footer and spinner
 
 ## Local development

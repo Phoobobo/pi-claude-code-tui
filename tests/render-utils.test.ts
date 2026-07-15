@@ -4,13 +4,19 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import {
 	applyRoundedEditorBorders,
 	CURSOR_MARKER,
+	cursorOpenFromFgAnsi,
 	findBottomBorderIndex,
 	formatCwd,
+	formatModelLabel,
+	formatThinkingLabel,
 	headerColumnWidths,
 	isEditorBorderLine,
+	pickSlashCommandTips,
+	collectPiCommandNames,
 	restyleEditorCursor,
 	roundedBorderLine,
 	stripAnsi,
+	PI_BUILTIN_SLASH_COMMAND_NAMES,
 } from "../extensions/render-utils.ts";
 
 describe("formatCwd", () => {
@@ -20,6 +26,71 @@ describe("formatCwd", () => {
 
 	it("leaves paths outside home unchanged", () => {
 		assert.equal(formatCwd("/tmp/project", "/Users/me"), "/tmp/project");
+	});
+});
+
+describe("formatModelLabel", () => {
+	it("formats provider/id when both exist", () => {
+		assert.equal(formatModelLabel({ provider: "openai-codex", id: "gpt-5.5" }), "openai-codex/gpt-5.5");
+	});
+
+	it("falls back to id or default", () => {
+		assert.equal(formatModelLabel({ id: "gpt-5.5" }), "gpt-5.5");
+		assert.equal(formatModelLabel(undefined), "Default model");
+	});
+});
+
+describe("formatThinkingLabel", () => {
+	it("keeps off explicit", () => {
+		assert.equal(formatThinkingLabel("off"), "off");
+		assert.equal(formatThinkingLabel("high"), "high");
+	});
+});
+
+describe("pickSlashCommandTips", () => {
+	it("always leads with fixed commands then random picks", () => {
+		const tips = pickSlashCommandTips(["model", "compact", "new", "reload"], {
+			fixed: ["use-default-tui"],
+			count: 3,
+			random: () => 0, // deterministic shuffle direction
+		});
+		assert.equal(tips[0], "/use-default-tui");
+		assert.equal(tips.length, 4);
+		assert.ok(tips.every((t) => t.startsWith("/")));
+		assert.ok(!tips.includes("/use-claude-code-tui"));
+	});
+
+	it("excludes fixed and package self-command from the random pool", () => {
+		const tips = pickSlashCommandTips(
+			["use-default-tui", "use-claude-code-tui", "model", "compact", "hotkeys"],
+			{
+				fixed: ["use-default-tui"],
+				count: 3,
+				random: () => 0,
+			},
+		);
+		assert.equal(tips[0], "/use-default-tui");
+		assert.equal(tips.length, 4);
+		assert.ok(!tips.includes("/use-claude-code-tui"));
+		assert.deepEqual(new Set(tips.slice(1)), new Set(["/model", "/compact", "/hotkeys"]));
+	});
+
+	it("handles a small pool without padding", () => {
+		const tips = pickSlashCommandTips(["model"], {
+			fixed: ["use-default-tui"],
+			count: 3,
+		});
+		assert.deepEqual(tips, ["/use-default-tui", "/model"]);
+	});
+});
+
+describe("collectPiCommandNames", () => {
+	it("merges builtins with session commands", () => {
+		const names = collectPiCommandNames([{ name: "use-default-tui" }, { name: "my-cmd" }]);
+		assert.ok(names.includes("model"));
+		assert.ok(names.includes(PI_BUILTIN_SLASH_COMMAND_NAMES[0]!));
+		assert.ok(names.includes("my-cmd"));
+		assert.ok(names.includes("use-default-tui"));
 	});
 });
 
@@ -108,6 +179,19 @@ describe("roundedBorderLine", () => {
 	});
 });
 
+describe("cursorOpenFromFgAnsi", () => {
+	it("turns truecolor fg into a bg block cursor open style", () => {
+		const open = cursorOpenFromFgAnsi("\x1b[38;2;215;119;87m");
+		assert.equal(open.startsWith("\x1b[48;2;215;119;87m"), true);
+		assert.equal(open.includes("\x1b[38;2;24;24;30m"), true);
+	});
+
+	it("turns 256-color fg into bg", () => {
+		const open = cursorOpenFromFgAnsi("\x1b[38;5;208m");
+		assert.equal(open.startsWith("\x1b[48;5;208m"), true);
+	});
+});
+
 describe("applyRoundedEditorBorders", () => {
 	it("does not turn the last autocomplete row into a bottom border", () => {
 		const width = 24;
@@ -124,10 +208,20 @@ describe("applyRoundedEditorBorders", () => {
 		assert.equal(stripAnsi(result[3]!), " /use-claude-code-tui".padEnd(width));
 		assert.equal(stripAnsi(result[4]!), " /use-default-tui".padEnd(width));
 	});
+
+	it("keeps content rows half-open without vertical sides", () => {
+		const width = 24;
+		const lines = ["─".repeat(width), " typed text", "─".repeat(width)];
+		const result = applyRoundedEditorBorders(lines, width, (s) => s);
+		assert.equal(stripAnsi(result[0]!), `╭${"─".repeat(width - 2)}╮`);
+		assert.equal(stripAnsi(result[1]!).includes("│"), false);
+		assert.equal(stripAnsi(result[2]!), `╰${"─".repeat(width - 2)}╯`);
+		assert.equal(visibleWidth(result[1]!), width);
+	});
 });
 
 describe("restyleEditorCursor", () => {
-	const open = "\x1b[48;2;215;119;87m\x1b[38;2;24;24;30m";
+	const open = cursorOpenFromFgAnsi("\x1b[38;2;215;119;87m");
 
 	it("restyles reverse-video cursor after the focus marker", () => {
 		const line = `hello${CURSOR_MARKER}\x1b[7m \x1b[0mworld`;

@@ -2,7 +2,20 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 export const BRAND_RGB = "215;119;87";
 export const brand = (text: string) => `\x1b[38;2;${BRAND_RGB}m${text}\x1b[39m`;
-export const cursorStyleOpen = () => `\x1b[48;2;${BRAND_RGB}m\x1b[38;2;24;24;30m`;
+
+/**
+ * Build a block-cursor open style from a theme foreground ANSI sequence.
+ * Turns `38;…` (fg) into `48;…` (bg) and pairs it with a dark foreground.
+ */
+export function cursorOpenFromFgAnsi(fgAnsi: string): string {
+	const bg = fgAnsi.replace("\x1b[38;", "\x1b[48;").replace("\u001b[38;", "\u001b[48;");
+	// Dark ink on the accent block for contrast (same idea as the old brand cursor).
+	return `${bg}\x1b[38;2;24;24;30m`;
+}
+
+/** Fallback when theme accent is unavailable. */
+export const cursorStyleOpen = () => cursorOpenFromFgAnsi(`\x1b[38;2;${BRAND_RGB}m`);
+
 /**
  * Logo half is the hero (Claude Code style): it takes most of the width and
  * grows on wide terminals so the mark stays centered in a large left area.
@@ -25,6 +38,96 @@ export function stripAnsi(text: string): string {
 
 export function formatCwd(cwd: string, home = process.env.HOME): string {
 	return home && cwd.startsWith(home) ? `~${cwd.slice(home.length)}` : cwd;
+}
+
+/** Prefer `provider/id` when available (matches other pi extension examples). */
+export function formatModelLabel(model: { provider?: string; id?: string } | null | undefined): string {
+	if (!model?.id) return "Default model";
+	return model.provider ? `${model.provider}/${model.id}` : model.id;
+}
+
+export function formatThinkingLabel(level: string): string {
+	return level === "off" ? "off" : level;
+}
+
+/**
+ * Built-in interactive slash command names (from pi's BUILTIN_SLASH_COMMANDS).
+ * `pi.getCommands()` only returns extension/prompt/skill commands, so we keep
+ * this list to surface real host commands in tips.
+ */
+export const PI_BUILTIN_SLASH_COMMAND_NAMES = [
+	"settings",
+	"model",
+	"scoped-models",
+	"export",
+	"import",
+	"share",
+	"copy",
+	"name",
+	"session",
+	"changelog",
+	"hotkeys",
+	"fork",
+	"clone",
+	"tree",
+	"trust",
+	"login",
+	"logout",
+	"new",
+	"compact",
+	"resume",
+	"reload",
+	"quit",
+] as const;
+
+/**
+ * Build tip lines: always include `fixed` (default `/use-default-tui`), then
+ * `count` random picks from the available command pool.
+ * Returns slash-prefixed names, e.g. `["/use-default-tui", "/model", ...]`.
+ */
+export function pickSlashCommandTips(
+	availableNames: readonly string[],
+	options: {
+		fixed?: readonly string[];
+		count?: number;
+		exclude?: readonly string[];
+		/** Injected RNG in [0, 1) for tests. */
+		random?: () => number;
+	} = {},
+): string[] {
+	const fixed = [...(options.fixed ?? ["use-default-tui"])];
+	const count = options.count ?? 3;
+	const exclude = new Set<string>([
+		...(options.exclude ?? []),
+		...fixed,
+		// Don't advertise re-enabling this package look in the tips list.
+		"use-claude-code-tui",
+	]);
+	const random = options.random ?? Math.random;
+
+	const pool = [...new Set(availableNames.map((n) => n.trim()).filter(Boolean))].filter(
+		(name) => !exclude.has(name),
+	);
+
+	// Partial Fisher–Yates for `count` samples without bias.
+	for (let i = pool.length - 1; i > 0; i--) {
+		const j = Math.floor(random() * (i + 1));
+		const tmp = pool[i]!;
+		pool[i] = pool[j]!;
+		pool[j] = tmp;
+	}
+
+	const picked = pool.slice(0, Math.max(0, count));
+	return [...fixed, ...picked].map((name) => (name.startsWith("/") ? name : `/${name}`));
+}
+
+/** Collect host builtins + session commands from `pi.getCommands()`. */
+export function collectPiCommandNames(sessionCommands: readonly { name: string }[]): string[] {
+	const names = new Set<string>(PI_BUILTIN_SLASH_COMMAND_NAMES);
+	for (const command of sessionCommands) {
+		if (command.name) names.add(command.name);
+	}
+	return [...names];
 }
 
 export function center(text: string, width: number): string {
@@ -143,8 +246,8 @@ export function restyleEditorCursor(line: string, openStyle: string): string {
 }
 
 /**
- * Apply Codex-style rounded borders to Editor.render output without touching
- * autocomplete rows that may follow the bottom border.
+ * Apply half-open rounded borders (top + bottom only) to Editor.render output.
+ * Leaves content rows and autocomplete rows without vertical sides.
  */
 export function applyRoundedEditorBorders(
 	lines: string[],
@@ -154,9 +257,9 @@ export function applyRoundedEditorBorders(
 	if (lines.length === 0 || width < 4) return lines;
 
 	const result = lines.slice();
-	result[0] = roundedBorderLine(result[0]!, width, "top", color);
-
 	const bottomIdx = findBottomBorderIndex(result);
+
+	result[0] = roundedBorderLine(result[0]!, width, "top", color);
 	result[bottomIdx] = roundedBorderLine(result[bottomIdx]!, width, "bottom", color);
 
 	return result.map((line) => padRight(truncateToWidth(line, width, ""), width));

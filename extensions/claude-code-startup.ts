@@ -9,12 +9,15 @@ import type { Component, EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
 	applyRoundedEditorBorders,
-	brand,
 	center,
-	cursorStyleOpen,
+	collectPiCommandNames,
+	cursorOpenFromFgAnsi,
 	formatCwd,
+	formatModelLabel,
+	formatThinkingLabel,
 	headerColumnWidths,
 	padRight,
+	pickSlashCommandTips,
 	restyleEditorCursor,
 } from "./render-utils.ts";
 
@@ -47,7 +50,7 @@ const LOGO_FRAMES: LogoFrame[] = [
 	{ phase: 6, active: "none", ax: 0, ay: 0, flash: false, white: false },
 ];
 
-const colorCell = (color: LogoColor): string => {
+const colorCell = (color: LogoColor, paintBrand: (text: string) => string): string => {
 	switch (color) {
 		case "cyan":
 			return `\x1b[36m${LOGO_CELL}\x1b[39m`;
@@ -61,7 +64,7 @@ const colorCell = (color: LogoColor): string => {
 		case "white":
 			return `\x1b[39m${LOGO_CELL}`;
 		case "brand":
-			return brand(LOGO_CELL);
+			return paintBrand(LOGO_CELL);
 		default:
 			return " ".repeat(LOGO_CELL.length);
 	}
@@ -121,7 +124,7 @@ function logoCellColor(frame: LogoFrame, y: number, x: number): LogoColor {
 	return "panel";
 }
 
-function piLogoFrame(frameIndex: number): string[] {
+function piLogoFrame(frameIndex: number, paintBrand: (text: string) => string): string[] {
 	const frame = LOGO_FRAMES[frameIndex % LOGO_FRAMES.length]!;
 	// Crop the installer's 9-row canvas vertically for a compact header, then
 	// tight-crop empty columns so the mark centers cleanly in the logo half
@@ -150,41 +153,63 @@ function piLogoFrame(frameIndex: number): string[] {
 
 	return grid.map((row) => {
 		let line = "";
-		for (let x = minX; x <= maxX; x++) line += colorCell(row[x]!);
+		for (let x = minX; x <= maxX; x++) line += colorCell(row[x]!, paintBrand);
 		return line;
 	});
 }
 
-function borderLine(left: string, label: string, right: string, width: number): string {
+function borderLine(
+	left: string,
+	label: string,
+	right: string,
+	width: number,
+	paint: (text: string) => string,
+): string {
 	if (width <= 1) return "";
-	if (width < 8 || label.length === 0) return brand(truncateToWidth(left + "─".repeat(Math.max(0, width - 2)) + right, width, ""));
+	if (width < 8 || label.length === 0) {
+		return paint(truncateToWidth(left + "─".repeat(Math.max(0, width - 2)) + right, width, ""));
+	}
 
 	const before = "─── ";
 	const after = " ─────";
 	const fixedWidth = visibleWidth(before) + visibleWidth(label) + visibleWidth(after);
 	const fill = Math.max(0, width - 2 - fixedWidth);
-	return `${brand(left)}${brand(before)}${label}${brand(after)}${brand("─".repeat(fill))}${brand(right)}`;
+	return `${paint(left)}${paint(before)}${label}${paint(after)}${paint("─".repeat(fill))}${paint(right)}`;
 }
 
-function boxedLine(content: string, width: number): string {
+function boxedLine(content: string, width: number, paint: (text: string) => string): string {
 	if (width <= 2) return truncateToWidth(content, width, "");
-	return `${brand("│")}${padRight(content, width - 2)}${brand("│")}`;
+	return `${paint("│")}${padRight(content, width - 2)}${paint("│")}`;
 }
 
-function twoColumn(left: string, right: string, leftWidth: number, rightWidth: number): string {
+function twoColumn(
+	left: string,
+	right: string,
+	leftWidth: number,
+	rightWidth: number,
+	paint: (text: string) => string,
+): string {
 	// Tips sidebar truncates with an ellipsis (Claude Code style); logo half does not.
-	return `${padRight(left, leftWidth)} ${brand("│")} ${padRight(right, rightWidth, "…")}`;
+	return `${padRight(left, leftWidth)} ${paint("│")} ${padRight(right, rightWidth, "…")}`;
 }
 
 class PiStartupHeader implements Component {
 	private frame = 0;
 	private readonly timer: NodeJS.Timeout;
+	/** Cached once so logo animation frames don't reshuffle tip commands. */
+	private readonly tipCommands: string[];
 
 	constructor(
 		private readonly pi: ExtensionAPI,
 		private readonly ctx: ExtensionContext,
 		private readonly tui: TUI,
 	) {
+		const pool = collectPiCommandNames(this.pi.getCommands());
+		this.tipCommands = pickSlashCommandTips(pool, {
+			fixed: ["use-default-tui"],
+			count: 3,
+		});
+
 		this.timer = setInterval(() => {
 			if (this.frame < LOGO_FRAMES.length - 1) {
 				this.frame++;
@@ -197,47 +222,51 @@ class PiStartupHeader implements Component {
 	}
 
 	render(width: number): string[] {
-		if (width < 24) return [this.ctx.ui.theme.fg("accent", `Pi v${VERSION}`)];
-
 		const theme = this.ctx.ui.theme;
+		const paint = (s: string) => theme.fg("accent", s);
 		const muted = (s: string) => theme.fg("muted", s);
 		const dim = (s: string) => theme.fg("dim", s);
 		const bold = (s: string) => theme.bold(s);
 
+		if (width < 24) return [paint(`Pi v${VERSION}`)];
+
 		const innerWidth = width - 2;
 		const { leftWidth, rightWidth, useTips } = headerColumnWidths(innerWidth);
-		const model = this.ctx.model?.id ?? "Default model";
-		const effort = this.pi.getThinkingLevel();
+		const model = formatModelLabel(this.ctx.model);
+		const effort = formatThinkingLabel(this.pi.getThinkingLevel());
 		const cwd = formatCwd(this.ctx.cwd);
 
 		const leftLines = [
-			...piLogoFrame(this.frame).map((line) => center(line, leftWidth)),
+			...piLogoFrame(this.frame, paint).map((line) => center(line, leftWidth)),
 			center(bold("Let's build something great"), leftWidth),
-			center(muted(`${model} with ${effort} effort`), leftWidth),
+			center(muted(`${model} · ${effort} effort`), leftWidth),
 			center(dim(cwd), leftWidth),
 		];
 
-		// Right sidebar: short headings + body lines (truncated with … when narrow).
-		const tipDivider = brand("─".repeat(Math.max(8, Math.min(rightWidth, 22))));
+		// /use-default-tui + 3 random real pi commands (picked once in constructor).
+		const tipDivider = paint("─".repeat(Math.max(8, Math.min(rightWidth, 22))));
+		const [cmd0 = "", cmd1 = "", cmd2 = "", cmd3 = ""] = this.tipCommands;
 		const tipLines = [
 			"",
-			brand(bold("This is your own agent harness")),
+			paint(bold("Getting started")),
 			muted("Ask Pi to build it"),
 			tipDivider,
-			brand(bold("AI is powerful")),
-			muted("But you are on your own"),
-			muted("You are powerful cause you're building"),
-			muted("You are wise cause you're creating"),
-			"",
+			paint(bold("Commands")),
+			muted(cmd0),
+			muted(cmd1),
+			muted(cmd2),
+			muted(cmd3),
 			"",
 		];
 
-		const lines = [borderLine("╭", `${brand("Pi")} v${VERSION}`, "╮", width)];
+		const lines = [borderLine("╭", `${paint("Pi")} v${VERSION}`, "╮", width, paint)];
 		for (let i = 0; i < leftLines.length; i++) {
-			const content = useTips ? twoColumn(leftLines[i] ?? "", tipLines[i] ?? "", leftWidth, rightWidth) : padRight(leftLines[i] ?? "", leftWidth);
-			lines.push(boxedLine(content, width));
+			const content = useTips
+				? twoColumn(leftLines[i] ?? "", tipLines[i] ?? "", leftWidth, rightWidth, paint)
+				: padRight(leftLines[i] ?? "", leftWidth);
+			lines.push(boxedLine(content, width, paint));
 		}
-		lines.push(borderLine("╰", "", "╯", width));
+		lines.push(borderLine("╰", "", "╯", width, paint));
 		return lines.map((line) => truncateToWidth(line, width, ""));
 	}
 
@@ -259,9 +288,11 @@ class CodexStyleEditor extends CustomEditor {
 	}
 
 	render(width: number): string[] {
+		// Half-open box: rounded top/bottom only (no vertical sides).
 		const open = this.cursorOpen();
+		const paint = (s: string) => this.borderColor(s);
 		const lines = super.render(width).map((line) => restyleEditorCursor(line, open));
-		return applyRoundedEditorBorders(lines, width);
+		return applyRoundedEditorBorders(lines, width, paint);
 	}
 }
 
@@ -283,9 +314,11 @@ function applyPiLook(pi: ExtensionAPI, ctx: ExtensionContext): void {
 	});
 	ctx.ui.setFooter(undefined); // keep pi's original footer
 	ctx.ui.setWorkingIndicator(undefined); // keep pi's original spinner
-	ctx.ui.setEditorComponent(
-		(tui, theme, keybindings) => new CodexStyleEditor(tui, theme, keybindings, cursorStyleOpen),
-	);
+	ctx.ui.setEditorComponent((tui, theme, keybindings) => {
+		// Cursor block uses theme accent (re-read each render so /theme switches apply).
+		const cursorOpen = () => cursorOpenFromFgAnsi(ctx.ui.theme.getFgAnsi("accent"));
+		return new CodexStyleEditor(tui, theme, keybindings, cursorOpen);
+	});
 }
 
 export default function (pi: ExtensionAPI) {
