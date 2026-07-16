@@ -31,7 +31,7 @@ pi -e npm:pi-claude-code-tui
 - Center text: `Let's build something great`
 - Shows current model (`provider/id`), thinking effort, and cwd
 - Right-side tips panel on wide terminals (narrow sidebar with `…` truncation)
-- Half-open rounded input box (top/bottom borders only; uses editor border color)
+- Complete rounded input box (uses editor border color)
 - Block cursor uses the theme accent color
 - Keeps pi's original footer and spinner
 

@@ -288,7 +288,7 @@ class CodexStyleEditor extends CustomEditor {
 	}
 
 	render(width: number): string[] {
-		// Half-open box: rounded top/bottom only (no vertical sides).
+		// Closed box: round from all sides.
 		const open = this.cursorOpen();
 		const paint = (s: string) => this.borderColor(s);
 		const lines = super.render(width).map((line) => restyleEditorCursor(line, open));
