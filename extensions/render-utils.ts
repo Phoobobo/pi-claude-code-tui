@@ -246,8 +246,8 @@ export function restyleEditorCursor(line: string, openStyle: string): string {
 }
 
 /**
- * Apply half-open rounded borders (top + bottom only) to Editor.render output.
- * Leaves content rows and autocomplete rows without vertical sides.
+ * Apply complete rounded borders to Editor.render output.
+ * Content rows and autocomplete rows are now with vertical borders.
  */
 export function applyRoundedEditorBorders(
 	lines: string[],
