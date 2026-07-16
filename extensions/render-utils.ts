@@ -262,5 +262,15 @@ export function applyRoundedEditorBorders(
 	result[0] = roundedBorderLine(result[0]!, width, "top", color);
 	result[bottomIdx] = roundedBorderLine(result[bottomIdx]!, width, "bottom", color);
 
-	return result.map((line) => padRight(truncateToWidth(line, width, ""), width));
+	const leftBorder = color("│");
+	const rightBorder = color("│");
+	const contentWidth = width - 4;
+
+	return result.map((line, i) => {
+		if (i === 0 || i === bottomIdx) {
+			return padRight(truncateToWidth(line, width, ""), width);
+		}
+		const content = padRight(truncateToWidth(line, contentWidth, ""), contentWidth);
+		return `${leftBorder} ${content} ${rightBorder}`;
+	});
 }

@@ -205,16 +205,16 @@ describe("applyRoundedEditorBorders", () => {
 		const result = applyRoundedEditorBorders(lines, width, (s) => s);
 		assert.equal(stripAnsi(result[0]!).startsWith("╭"), true);
 		assert.equal(stripAnsi(result[2]!).startsWith("╰"), true);
-		assert.equal(stripAnsi(result[3]!), " /use-claude-code-tui".padEnd(width));
-		assert.equal(stripAnsi(result[4]!), " /use-default-tui".padEnd(width));
+		assert.equal(stripAnsi(result[3]!), "│  /use-claude-code-tu │");
+		assert.equal(stripAnsi(result[4]!), "│  /use-default-tui    │");
 	});
 
-	it("keeps content rows half-open without vertical sides", () => {
+	it("adds vertical borders to content rows", () => {
 		const width = 24;
 		const lines = ["─".repeat(width), " typed text", "─".repeat(width)];
 		const result = applyRoundedEditorBorders(lines, width, (s) => s);
 		assert.equal(stripAnsi(result[0]!), `╭${"─".repeat(width - 2)}╮`);
-		assert.equal(stripAnsi(result[1]!).includes("│"), false);
+		assert.equal(stripAnsi(result[1]!), "│  typed text          │");
 		assert.equal(stripAnsi(result[2]!), `╰${"─".repeat(width - 2)}╯`);
 		assert.equal(visibleWidth(result[1]!), width);
 	});
