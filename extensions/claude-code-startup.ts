@@ -21,7 +21,9 @@ import {
 	restyleEditorCursor,
 } from "./render-utils.ts";
 
-const LOGO_CELL = "███";
+// 2-wide brush matches pi's native install-mark proportions better than
+// a 3-wide cell (which made the tight crop read as a near-square block).
+const LOGO_CELL = "██";
 const LOGO_ANIMATION_INTERVAL_MS = 120;
 
 type LogoColor = "panel" | "cyan" | "red" | "green" | "orange" | "white" | "flash" | "brand";
