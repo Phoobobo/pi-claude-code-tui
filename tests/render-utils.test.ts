@@ -17,6 +17,8 @@ import {
 	roundedBorderLine,
 	stripAnsi,
 	PI_BUILTIN_SLASH_COMMAND_NAMES,
+	PI_WORKING_VERBS,
+	pickWorkingVerb,
 } from "../extensions/render-utils.ts";
 
 describe("formatCwd", () => {
@@ -44,6 +46,19 @@ describe("formatThinkingLabel", () => {
 	it("keeps off explicit", () => {
 		assert.equal(formatThinkingLabel("off"), "off");
 		assert.equal(formatThinkingLabel("high"), "high");
+	});
+});
+
+describe("pickWorkingVerb", () => {
+	it("picks randomly from a large Pi working verb list", () => {
+		assert.ok(PI_WORKING_VERBS.length >= 80);
+		assert.equal(pickWorkingVerb(undefined, () => 0), PI_WORKING_VERBS[0]);
+		assert.equal(pickWorkingVerb(undefined, () => 0.999), PI_WORKING_VERBS.at(-1));
+	});
+
+	it("avoids repeating the previous verb", () => {
+		const previous = PI_WORKING_VERBS[0]!;
+		assert.notEqual(pickWorkingVerb(previous, () => 0), previous);
 	});
 });
 

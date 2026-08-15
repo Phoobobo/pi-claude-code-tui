@@ -33,7 +33,7 @@ pi -e npm:pi-claude-code-tui
 - Right-side tips panel on wide terminals (narrow sidebar with `…` truncation)
 - Half-open rounded input box (top/bottom borders only; uses editor border color)
 - Block cursor uses the theme accent color
-- Keeps pi's original footer and spinner
+- Keeps pi's original footer and spinner, with Claude-style rotating working verbs
 
 ## Local development
 

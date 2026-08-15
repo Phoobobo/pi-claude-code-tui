@@ -16,6 +16,7 @@ import {
 	formatModelLabel,
 	formatThinkingLabel,
 	headerColumnWidths,
+	pickWorkingVerb,
 	padRight,
 	pickSlashCommandTips,
 	restyleEditorCursor,
@@ -23,6 +24,7 @@ import {
 
 const LOGO_CELL = "███";
 const LOGO_ANIMATION_INTERVAL_MS = 120;
+const WORKING_VERB_INTERVAL_MS = 2400;
 
 type LogoColor = "panel" | "cyan" | "red" | "green" | "orange" | "white" | "flash" | "brand";
 type LogoFrame = {
@@ -297,6 +299,36 @@ class CodexStyleEditor extends CustomEditor {
 }
 
 let activePiStartupHeader: PiStartupHeader | undefined;
+let workingVerbTimer: NodeJS.Timeout | undefined;
+let workingVerbContext: ExtensionContext | undefined;
+
+function stopWorkingVerbs(ctx?: ExtensionContext): void {
+	if (workingVerbTimer) {
+		clearInterval(workingVerbTimer);
+		workingVerbTimer = undefined;
+	}
+
+	const activeContext = workingVerbContext ?? ctx;
+	workingVerbContext = undefined;
+	if (activeContext?.mode === "tui") activeContext.ui.setWorkingMessage(undefined);
+}
+
+function startWorkingVerbs(ctx: ExtensionContext): void {
+	if (ctx.mode !== "tui") return;
+
+	stopWorkingVerbs(ctx);
+	workingVerbContext = ctx;
+	let previous: string | undefined;
+	const update = () => {
+		const verb = pickWorkingVerb(previous);
+		previous = verb;
+		ctx.ui.setWorkingMessage(`${verb}...`);
+	};
+
+	update();
+	workingVerbTimer = setInterval(update, WORKING_VERB_INTERVAL_MS);
+	workingVerbTimer.unref?.();
+}
 
 function disposeActiveHeader(): void {
 	activePiStartupHeader?.dispose();
@@ -327,7 +359,16 @@ export default function (pi: ExtensionAPI) {
 		applyAfterOtherStartupHandlers.unref?.();
 	});
 
-	pi.on("session_shutdown", () => {
+	pi.on("agent_start", (_event, ctx) => {
+		startWorkingVerbs(ctx);
+	});
+
+	pi.on("agent_end", (_event, ctx) => {
+		stopWorkingVerbs(ctx);
+	});
+
+	pi.on("session_shutdown", (_event, ctx) => {
+		stopWorkingVerbs(ctx);
 		disposeActiveHeader();
 	});
 
@@ -343,6 +384,7 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("use-default-tui", {
 		description: "Switch back to pi's built-in header, footer, editor, and spinner",
 		handler: async (_args, ctx) => {
+			stopWorkingVerbs(ctx);
 			disposeActiveHeader();
 			ctx.ui.setTitle("pi");
 			ctx.ui.setHeader(undefined);
